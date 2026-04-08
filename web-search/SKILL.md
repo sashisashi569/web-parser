@@ -15,14 +15,14 @@ Search the web for a query and automatically retrieve the full content of top re
 Call the `run_js` tool using `index.html` and a JSON string for `data` with the following fields:
 
 - **query**: Required. The search query. Use specific keywords that best represent the user's intent. Write the query in the same language as the user's question when searching for region-specific or language-specific content, or in English for broad technical topics.
-- **max_results**: Optional. Number of top results to fetch full content for. Integer between 1 and 5, default is 2. Use fewer (1–2) for focused factual questions, more (3–5) for broad research tasks.
+- **max_results**: Optional. Number of top results to fetch full content for. 1 or 2, default is 1. Use 2 only when a single result is unlikely to contain the full answer.
 
 ## Examples
 
-- User: "2026年のAI動向を教えて" → `{ "query": "2026年 AI 動向 最新", "max_results": 2 }`
-- User: "What is the latest version of Python?" → `{ "query": "Python latest version 2026", "max_results": 2 }`
-- User: "How do I reverse a string in Rust?" → `{ "query": "Rust reverse string", "max_results": 2 }`
-- User: "Compare React and Vue in 2026" → `{ "query": "React vs Vue 2026 comparison", "max_results": 3 }`
+- User: "2026年のAI動向を教えて" → `{ "query": "2026年 AI 動向 最新" }`
+- User: "What is the latest version of Python?" → `{ "query": "Python latest version 2026" }`
+- User: "How do I reverse a string in Rust?" → `{ "query": "Rust reverse string" }`
+- User: "Compare React and Vue in 2026" → `{ "query": "React vs Vue 2026 comparison", "max_results": 2 }`
 
 ## Constraints
 

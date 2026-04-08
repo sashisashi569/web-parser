@@ -20,7 +20,7 @@ import { dirname, join } from 'path';
 const __dir = dirname(fileURLToPath(import.meta.url));
 
 // --- Same constants as index.html ---
-const MAX_CONTENT_CHARS = 1000;
+const MAX_CONTENT_CHARS = 2000;
 const SEARCH_BASE = 'https://s.jina.ai/';
 const READER_BASE = 'https://r.jina.ai/';
 
@@ -42,7 +42,7 @@ async function run(query, maxResultsArg, apiKey) {
   query = query.trim();
   if (!query) { console.error('Error: query is required.'); process.exit(1); }
 
-  const maxResults = Math.min(Math.max(1, parseInt(maxResultsArg) || 2), 5);
+  const maxResults = Math.min(Math.max(1, parseInt(maxResultsArg) || 1), 2);
 
   const searchHeaders = { 'Accept': 'application/json' };
   if (apiKey) searchHeaders['Authorization'] = `Bearer ${apiKey}`;

@@ -33,7 +33,7 @@
  * @returns {string} JSON: { result: string } or { error: string }
  */
 window['ai_edge_gallery_get_result'] = async (dataStr, secret) => {
-  const MAX_CONTENT_CHARS = 1000;
+  const MAX_CONTENT_CHARS = 2000;
   const SEARCH_BASE = 'https://s.jina.ai/';
   const READER_BASE = 'https://r.jina.ai/';
 
@@ -60,7 +60,7 @@ window['ai_edge_gallery_get_result'] = async (dataStr, secret) => {
     const query = (params.query || '').trim();
     if (!query) return JSON.stringify({ error: 'query is required.' });
 
-    const maxResults = Math.min(Math.max(1, parseInt(params.max_results) || 2), 5);
+    const maxResults = Math.min(Math.max(1, parseInt(params.max_results) || 1), 2);
     const apiKey = (typeof secret === 'string' ? secret : '').trim();
 
     // Search headers — minimal set to avoid unnecessary CORS preflight headers
