@@ -1,9 +1,20 @@
-# web-search
+# web-parser
 
-Google AI Edge Gallery Agent Mode 向けのWeb検索スキルです。
+Google AI Edge Gallery Agent Mode 向けのWebスキル集です。
+
+## スキル一覧
+
+| スキル | 説明 |
+|--------|------|
+| [web-search](web-search/) | Web検索と本文取得を1回の呼び出しで完結するスキル |
+
+---
+
+## web-search
+
 [Jina.ai](https://jina.ai) のSearch API・Reader APIを使い、検索から本文取得までを1回の`run_js`呼び出しで完結します。
 
-## 動作フロー
+### 動作フロー
 
 ```
 LLM が run_js("index.html", { query, max_results }) を呼ぶ
@@ -21,28 +32,26 @@ Markdown形式でLLMに返す
 
 HTTP通信・フィルタリング・整形はすべてJavaScriptで機械処理されます。LLMが関与するのは「クエリの決定」と「結果の要約」のみです。
 
-## セットアップ
+### セットアップ
 
-### 1. Jina.ai APIキーの取得
+#### 1. Jina.ai APIキーの取得
 
 1. [jina.ai](https://jina.ai) でサインアップ
 2. API Keys ページで無料キーを生成（無料枠: 10Mトークン）
 
-### 2. スキルのインポート
+#### 2. スキルのインポート
 
-Google AI Edge Gallery の Agent Skills 画面でURLを追加します。
+Google AI Edge Gallery の Agent Skills 画面で以下のURLを追加します。
 
 ```
-https://<your-github-pages>/web-search
+https://sashisashi569.github.io/web-parser/web-search
 ```
 
-> GitHub Pagesはリポジトリルートから`/`で配信し、リポジトリルートに`.nojekyll`が必要です。
-
-### 3. APIキーの設定
+#### 3. APIキーの設定
 
 インポート後にスキル設定画面が表示されます。取得したJina.ai APIキーを入力してください。
 
-## ファイル構成
+### ファイル構成
 
 ```
 web-search/
@@ -53,11 +62,11 @@ web-search/
     └── index.html          # スキル本体（JavaScriptロジック）
 ```
 
-## 設定の調整
+### 設定の調整
 
-### 除外ドメインの追加
+#### 除外ドメインの追加
 
-`blocked-domains.json` の `domains` 配列に追加します。`www.` は不要です。
+`web-search/blocked-domains.json` の `domains` 配列に追加します。`www.` は不要です。
 
 ```json
 {
@@ -71,9 +80,9 @@ web-search/
 
 ログイン必須・本文が取得できない・ノイズが多いサイトを追加してください。
 
-### コンテキスト量のチューニング
+#### コンテキスト量のチューニング
 
-`scripts/index.html` の定数を変更します。
+`web-search/scripts/index.html` の定数を変更します。
 
 | 定数 | デフォルト | 説明 |
 |------|-----------|------|
@@ -83,7 +92,7 @@ web-search/
 
 変更後は `emulate.mjs` でLLMへ渡されるコンテキストを確認できます。
 
-## ローカルエミュレーション
+### ローカルエミュレーション
 
 デバイスにデプロイせず、LLMへ渡される文字列を手元で確認できます。
 
@@ -123,7 +132,7 @@ Stats:
   Token est. : ~2839
 ```
 
-## エラー診断
+### エラー診断
 
 スキルが失敗した場合、エラーメッセージの先頭コードで原因を特定できます。
 
@@ -135,7 +144,7 @@ Stats:
 | `[PARSE_ERROR]` | レスポンスが予期しない形式 | Jina.ai APIの変更の可能性 |
 | `[UNEXPECTED]` | その他の例外 | エラー詳細を確認 |
 
-## 動作確認済み環境
+### 動作確認済み環境
 
 - Google AI Edge Gallery (Agent Skills)
 - Gemma-4-E2B-IT (on-device, 8GB / 12GB RAM)
