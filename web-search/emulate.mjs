@@ -29,6 +29,15 @@ const getDomain = url => {
   catch (_) { return ''; }
 };
 
+// Mirror of the cleanContent function in scripts/index.html
+const cleanContent = text => text
+  .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // [text](url) → text
+  .replace(/https?:\/\/\S+/g, '')           // bare URLs
+  .replace(/^\[[^\]]+\]:\s+\S+.*$/gm, '')   // reference-style link defs
+  .replace(/^\*.*$/gm, '')                  // lines starting with *
+  .replace(/\n{3,}/g, '\n\n')
+  .trim();
+
 async function run(query, maxResultsArg, apiKey) {
   query = query.trim();
   if (!query) { console.error('Error: query is required.'); process.exit(1); }
@@ -109,7 +118,7 @@ async function run(query, maxResultsArg, apiKey) {
         return { title, url, content: fallbackContent };
       }
       const fetchData = await fetchRes.json();
-      const content = (fetchData.data?.content || fallbackContent).slice(0, MAX_CONTENT_CHARS);
+      const content = (cleanContent(fetchData.data?.content || '') || fallbackContent).slice(0, MAX_CONTENT_CHARS);
       console.log(`  [${i + 1}] OK — ${content.length} chars from ${getDomain(url)}`);
       return { title, url, content };
     } catch (e) {
