@@ -72,7 +72,7 @@ window['ai_edge_gallery_get_result'] = async (dataStr, secret) => {
     const pages = await Promise.all(hits.map(async (hit) => {
       const title = hit.title || '(no title)';
       const url = hit.url || '';
-      const fallbackContent = hit.content || hit.description || '';
+      const fallbackContent = (hit.content || hit.description || '').slice(0, MAX_CONTENT_CHARS);
 
       if (!url) {
         return { title, url, content: fallbackContent };
