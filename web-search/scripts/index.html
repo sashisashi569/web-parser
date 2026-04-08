@@ -22,22 +22,17 @@
 /**
  * Web Search + Fetch skill for Google AI Edge Gallery Agent Mode.
  *
- * Search: Google Custom Search JSON API (auth via URL param, no CORS preflight)
- * Fetch:  Jina.ai Reader API r.jina.ai (no auth required for reader)
- *
- * Secret format: "{API_KEY}:{CX_ID}"
- *   API_KEY: Google API key with Custom Search JSON API enabled
- *   CX_ID:   Programmable Search Engine ID (cx)
- *   Example: "AIzaSy...:{your_cx_id}"
+ * Search: Jina.ai Search API (s.jina.ai) via Authorization header
+ * Fetch:  Jina.ai Reader API (r.jina.ai)
  *
  * @param {string} dataStr - JSON with: query (required), max_results (optional, 1-5, default 2)
- * @param {string} secret  - "{API_KEY}:{CX_ID}" from skill settings
+ * @param {string} secret  - Jina.ai API key
  * @returns {string} JSON: { result: string } or { error: string }
  */
 window['ai_edge_gallery_get_result'] = async (dataStr, secret) => {
   const MAX_CONTENT_CHARS = 500;
+  const SEARCH_BASE = 'https://s.jina.ai/';
   const READER_BASE = 'https://r.jina.ai/';
-  const SEARCH_BASE = 'https://www.googleapis.com/customsearch/v1';
 
   try {
     const params = JSON.parse(dataStr);
@@ -45,68 +40,72 @@ window['ai_edge_gallery_get_result'] = async (dataStr, secret) => {
     if (!query) return JSON.stringify({ error: 'query is required.' });
 
     const maxResults = Math.min(Math.max(1, parseInt(params.max_results) || 2), 5);
+    const apiKey = (typeof secret === 'string' ? secret : '').trim();
 
-    // Parse secret: "{API_KEY}:{CX_ID}"
-    const secretStr = (typeof secret === 'string' ? secret : '').trim();
-    const colonIdx = secretStr.indexOf(':');
-    if (!secretStr || colonIdx < 1) {
-      return JSON.stringify({
-        error: 'API key not configured. Set secret as "{Google_API_Key}:{CX_ID}". See SKILL.md for setup instructions.'
-      });
-    }
-    const apiKey = secretStr.slice(0, colonIdx).trim();
-    const cx = secretStr.slice(colonIdx + 1).trim();
+    const headers = { 'Accept': 'application/json' };
+    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
 
-    if (!apiKey || !cx) {
-      return JSON.stringify({
-        error: 'Invalid secret format. Expected "{Google_API_Key}:{CX_ID}".'
-      });
-    }
-
-    // Step 1: Search via Google Custom Search JSON API
-    // Auth via URL params — no Authorization header, no CORS preflight.
-    const searchUrl = `${SEARCH_BASE}?key=${encodeURIComponent(apiKey)}&cx=${encodeURIComponent(cx)}&q=${encodeURIComponent(query)}&num=${maxResults}`;
-
+    // Step 1: Search
+    // Separate try/catch to distinguish CORS/network errors from HTTP errors.
     let searchRes;
     try {
-      searchRes = await fetch(searchUrl, { credentials: 'omit' });
+      searchRes = await fetch(SEARCH_BASE + encodeURIComponent(query), {
+        headers,
+        credentials: 'omit',
+      });
     } catch (netErr) {
+      // "Failed to fetch" here usually means a CORS preflight was blocked,
+      // or the device has no network access.
       return JSON.stringify({
-        error: `[Network error] Could not reach search API: "${netErr.message}"`
+        error: `[NETWORK_ERROR] ${netErr.message} | apiKey set: ${!!apiKey}`
       });
     }
 
     if (!searchRes.ok) {
-      let detail = '';
-      try { detail = (await searchRes.json()).error?.message || ''; } catch (_) {}
+      // Request reached the server — not a CORS issue.
       return JSON.stringify({
-        error: `[HTTP ${searchRes.status}] Search failed. ${detail || (searchRes.status === 403 ? 'Check API key and CX ID.' : '')}`
+        error: `[HTTP_${searchRes.status}] Search API returned error. ${
+          searchRes.status === 401 ? 'API key missing or invalid.' :
+          searchRes.status === 429 ? 'Rate limit exceeded.' : ''
+        } | apiKey set: ${!!apiKey}`
       });
     }
 
-    const searchData = await searchRes.json();
-    const items = (searchData.items || []).slice(0, maxResults);
+    // Step 2: Parse response
+    let searchData;
+    try {
+      const text = await searchRes.text();
+      searchData = JSON.parse(text);
+    } catch (parseErr) {
+      return JSON.stringify({
+        error: `[PARSE_ERROR] Search response was not valid JSON: ${parseErr.message}`
+      });
+    }
 
-    if (items.length === 0) {
+    const hits = (searchData.data || []).slice(0, maxResults);
+    if (hits.length === 0) {
       return JSON.stringify({ result: 'No search results found for the given query.' });
     }
 
-    // Step 2: Fetch full page content via r.jina.ai (no auth needed for reader)
-    const pages = await Promise.all(items.map(async (item) => {
-      const title = item.title || '(no title)';
-      const url = item.link || '';
-      const snippet = (item.snippet || '').slice(0, MAX_CONTENT_CHARS);
+    // Step 3: Fetch full page content for each result in parallel
+    const pages = await Promise.all(hits.map(async (hit) => {
+      const title = hit.title || '(no title)';
+      const url = hit.url || '';
+      const fallbackContent = (hit.content || hit.description || '').slice(0, MAX_CONTENT_CHARS);
 
-      if (!url) return { title, url, content: snippet };
+      if (!url) return { title, url, content: fallbackContent };
 
       try {
-        const fetchRes = await fetch(READER_BASE + url, { credentials: 'omit' });
-        if (!fetchRes.ok) return { title, url, content: snippet };
+        const fetchRes = await fetch(READER_BASE + url, {
+          headers,
+          credentials: 'omit',
+        });
+        if (!fetchRes.ok) return { title, url, content: fallbackContent };
         const fetchData = await fetchRes.json();
-        const content = (fetchData.data?.content || snippet).slice(0, MAX_CONTENT_CHARS);
+        const content = (fetchData.data?.content || fallbackContent).slice(0, MAX_CONTENT_CHARS);
         return { title, url, content };
       } catch (_) {
-        return { title, url, content: snippet };
+        return { title, url, content: fallbackContent };
       }
     }));
 
@@ -117,7 +116,7 @@ window['ai_edge_gallery_get_result'] = async (dataStr, secret) => {
     return JSON.stringify({ result: output });
 
   } catch (e) {
-    return JSON.stringify({ error: `[Unexpected error] ${e.message}` });
+    return JSON.stringify({ error: `[UNEXPECTED] ${e.message}` });
   }
 };
 </script>
