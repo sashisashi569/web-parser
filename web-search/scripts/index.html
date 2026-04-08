@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+</head>
+<body>
+<script>
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * Web Search + Fetch skill for Google AI Edge Gallery Agent Mode.
+ *
+ * Searches the web via Jina.ai Search API (s.jina.ai), then fetches
+ * the full content of top results via Jina.ai Reader API (r.jina.ai).
+ * Both APIs are free to use; an optional API key increases rate limits.
+ *
+ * @param {string} dataStr - JSON string with fields:
+ *   - query {string} Required. The search query.
+ *   - max_results {number} Optional. Number of results to fetch (1–5, default 3).
+ * @param {string} secret - Optional Jina.ai API key.
+ * @returns {string} JSON string with { result: string } or { error: string }.
+ */
+window['ai_edge_gallery_get_result'] = async (dataStr, secret) => {
+  const MAX_CONTENT_CHARS = 3000;
+  const SEARCH_BASE = 'https://s.jina.ai/';
+  const READER_BASE = 'https://r.jina.ai/';
+
+  try {
+    const params = JSON.parse(dataStr);
+    const query = (params.query || '').trim();
+
+    if (!query) {
+      return JSON.stringify({ error: 'query is required.' });
+    }
+
+    const maxResults = Math.min(Math.max(1, parseInt(params.max_results) || 3), 5);
+
+    const headers = { 'Accept': 'application/json' };
+    if (secret) {
+      headers['Authorization'] = `Bearer ${secret}`;
+    }
+
+    // Step 1: Search
+    const searchRes = await fetch(SEARCH_BASE + encodeURIComponent(query), { headers });
+
+    if (!searchRes.ok) {
+      return JSON.stringify({
+        error: `Search request failed with status ${searchRes.status}.`
+      });
+    }
+
+    const searchData = await searchRes.json();
+    const hits = (searchData.data || []).slice(0, maxResults);
+
+    if (hits.length === 0) {
+      return JSON.stringify({ result: 'No search results found for the given query.' });
+    }
+
+    // Step 2: Fetch full page content for each result in parallel
+    const pages = await Promise.all(hits.map(async (hit) => {
+      const title = hit.title || '(no title)';
+      const url = hit.url || '';
+      const fallbackContent = hit.content || hit.description || '';
+
+      if (!url) {
+        return { title, url, content: fallbackContent };
+      }
+
+      try {
+        const fetchRes = await fetch(READER_BASE + url, { headers });
+        if (!fetchRes.ok) {
+          return { title, url, content: fallbackContent };
+        }
+        const fetchData = await fetchRes.json();
+        const content = (fetchData.data?.content || fallbackContent).slice(0, MAX_CONTENT_CHARS);
+        return { title, url, content };
+      } catch (_) {
+        return { title, url, content: fallbackContent };
+      }
+    }));
+
+    // Format as structured markdown for the agent
+    const output = pages
+      .map((p, i) => `## [${i + 1}] ${p.title}\nSource: ${p.url}\n\n${p.content}`)
+      .join('\n\n---\n\n');
+
+    return JSON.stringify({ result: output });
+
+  } catch (e) {
+    return JSON.stringify({ error: e.message });
+  }
+};
+</script>
+</body>
+</html>
