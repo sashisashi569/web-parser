@@ -45,6 +45,16 @@ window['ai_edge_gallery_get_result'] = async (dataStr, secret) => {
     catch (_) { return ''; }
   };
 
+  // Remove link markup and bullet lines from reader content.
+  // Applied before slicing so MAX_CONTENT_CHARS is filled with body text only.
+  const cleanContent = text => text
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // [text](url) → text
+    .replace(/https?:\/\/\S+/g, '')           // bare URLs
+    .replace(/^\[[^\]]+\]:\s+\S+.*$/gm, '')   // reference-style link defs
+    .replace(/^\*.*$/gm, '')                  // lines starting with *
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
   try {
     const params = JSON.parse(dataStr);
     const query = (params.query || '').trim();
@@ -134,7 +144,7 @@ window['ai_edge_gallery_get_result'] = async (dataStr, secret) => {
         });
         if (!fetchRes.ok) return { title, url, content: fallbackContent };
         const fetchData = await fetchRes.json();
-        const content = (fetchData.data?.content || fallbackContent).slice(0, MAX_CONTENT_CHARS);
+        const content = (cleanContent(fetchData.data?.content || '') || fallbackContent).slice(0, MAX_CONTENT_CHARS);
         return { title, url, content };
       } catch (_) {
         return { title, url, content: fallbackContent };
