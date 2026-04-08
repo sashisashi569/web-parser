@@ -3,15 +3,7 @@ name: web-search
 description: Search the web and retrieve full page content from top results for any query.
 metadata:
   require-secret: true
-  require-secret-description: |
-    Google Custom Search API credentials in the format: {API_KEY}:{CX_ID}
-
-    Setup (one-time, free):
-    1. Get an API key: https://console.cloud.google.com → Enable "Custom Search JSON API"
-    2. Create a search engine: https://programmablesearchengine.google.com → New Search Engine → "Search the entire web" → copy the cx ID
-    3. Enter as: your_api_key:your_cx_id (colon-separated, no spaces)
-
-    Free quota: 100 queries/day.
+  require-secret-description: "Jina.ai API key. Get a free key at https://jina.ai (sign up → API Keys). The free tier includes 10 million tokens."
 ---
 
 # Web Search
