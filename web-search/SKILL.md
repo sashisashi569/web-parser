@@ -2,8 +2,8 @@
 name: web-search
 description: Search the web and retrieve full page content from top results for any query.
 metadata:
-  require-secret: false
-  require-secret-description: "Jina.ai API key (optional). Obtain a free key at https://jina.ai to increase rate limits. Recommended when used in large shared networks where multiple users share the same global IP address."
+  require-secret: true
+  require-secret-description: "Jina.ai API key. Get a free key at https://jina.ai (sign up → API Keys). The free tier includes 10 million tokens."
 ---
 
 # Web Search
