@@ -1,0 +1,16 @@
+{
+  "description": "Domains excluded from web-search skill results. Add domains without www prefix. Domains are excluded because they either require login, return no useful text content, or produce bloated responses that waste context.",
+  "domains": [
+    "youtube.com",
+    "youtu.be",
+    "twitter.com",
+    "x.com",
+    "instagram.com",
+    "facebook.com",
+    "linkedin.com",
+    "tiktok.com",
+    "pinterest.com",
+    "amazon.co.jp",
+    "amazon.com"
+  ]
+}

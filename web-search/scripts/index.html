@@ -23,7 +23,10 @@
  * Web Search + Fetch skill for Google AI Edge Gallery Agent Mode.
  *
  * Search: Jina.ai Search API (s.jina.ai) via Authorization header
- * Fetch:  Jina.ai Reader API (r.jina.ai)
+ * Fetch:  Jina.ai Reader API (r.jina.ai) with content extraction headers
+ *
+ * Domain exclusions are managed in blocked-domains.json (same directory
+ * as this skill), fetched at runtime in parallel with the search request.
  *
  * @param {string} dataStr - JSON with: query (required), max_results (optional, 1-5, default 2)
  * @param {string} secret  - Jina.ai API key
@@ -34,6 +37,14 @@ window['ai_edge_gallery_get_result'] = async (dataStr, secret) => {
   const SEARCH_BASE = 'https://s.jina.ai/';
   const READER_BASE = 'https://r.jina.ai/';
 
+  // blocked-domains.json lives one directory above this script (skill root)
+  const blockedDomainsUrl = new URL('../blocked-domains.json', window.location.href).href;
+
+  const getDomain = url => {
+    try { return new URL(url).hostname.replace(/^www\./, ''); }
+    catch (_) { return ''; }
+  };
+
   try {
     const params = JSON.parse(dataStr);
     const query = (params.query || '').trim();
@@ -42,27 +53,40 @@ window['ai_edge_gallery_get_result'] = async (dataStr, secret) => {
     const maxResults = Math.min(Math.max(1, parseInt(params.max_results) || 2), 5);
     const apiKey = (typeof secret === 'string' ? secret : '').trim();
 
-    const headers = { 'Accept': 'application/json' };
-    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+    // Search headers — minimal set to avoid unnecessary CORS preflight headers
+    const searchHeaders = { 'Accept': 'application/json' };
+    if (apiKey) searchHeaders['Authorization'] = `Bearer ${apiKey}`;
+
+    // Reader headers — Jina content extraction options to reduce noise
+    const readerHeaders = {
+      ...searchHeaders,
+      'X-Return-Format': 'markdown',
+      'X-Retain-Images': 'none',
+      'X-Remove-Selector': 'header, footer, nav, .ad, .ads, .advertisement, #sidebar, .sidebar, .navigation, .menu, .comments, .related, .share, .sns',
+      'X-Timeout': '10',
+    };
+
+    // Start fetching blocked-domains.json in parallel with the search request.
+    // Failure is non-fatal — if the file is unavailable, filtering is skipped.
+    const blockedDomainsPromise = fetch(blockedDomainsUrl, { credentials: 'omit' })
+      .then(r => r.json())
+      .then(d => new Set(d.domains || []))
+      .catch(() => new Set());
 
     // Step 1: Search
-    // Separate try/catch to distinguish CORS/network errors from HTTP errors.
     let searchRes;
     try {
       searchRes = await fetch(SEARCH_BASE + encodeURIComponent(query), {
-        headers,
+        headers: searchHeaders,
         credentials: 'omit',
       });
     } catch (netErr) {
-      // "Failed to fetch" here usually means a CORS preflight was blocked,
-      // or the device has no network access.
       return JSON.stringify({
         error: `[NETWORK_ERROR] ${netErr.message} | apiKey set: ${!!apiKey}`
       });
     }
 
     if (!searchRes.ok) {
-      // Request reached the server — not a CORS issue.
       return JSON.stringify({
         error: `[HTTP_${searchRes.status}] Search API returned error. ${
           searchRes.status === 401 ? 'API key missing or invalid.' :
@@ -71,7 +95,6 @@ window['ai_edge_gallery_get_result'] = async (dataStr, secret) => {
       });
     }
 
-    // Step 2: Parse response
     let searchData;
     try {
       const text = await searchRes.text();
@@ -82,12 +105,21 @@ window['ai_edge_gallery_get_result'] = async (dataStr, secret) => {
       });
     }
 
-    const hits = (searchData.data || []).slice(0, maxResults);
+    // Wait for blocked-domains (already in-flight since search started)
+    const blockedDomains = await blockedDomainsPromise;
+
+    const hits = (searchData.data || [])
+      .filter(hit => {
+        const domain = getDomain(hit.url || '');
+        return domain && !blockedDomains.has(domain);
+      })
+      .slice(0, maxResults);
+
     if (hits.length === 0) {
       return JSON.stringify({ result: 'No search results found for the given query.' });
     }
 
-    // Step 3: Fetch full page content for each result in parallel
+    // Step 2: Fetch full page content for each result in parallel
     const pages = await Promise.all(hits.map(async (hit) => {
       const title = hit.title || '(no title)';
       const url = hit.url || '';
@@ -97,7 +129,7 @@ window['ai_edge_gallery_get_result'] = async (dataStr, secret) => {
 
       try {
         const fetchRes = await fetch(READER_BASE + url, {
-          headers,
+          headers: readerHeaders,
           credentials: 'omit',
         });
         if (!fetchRes.ok) return { title, url, content: fallbackContent };
