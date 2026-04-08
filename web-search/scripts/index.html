@@ -33,7 +33,7 @@
  * @returns {string} JSON string with { result: string } or { error: string }.
  */
 window['ai_edge_gallery_get_result'] = async (dataStr, secret) => {
-  const MAX_CONTENT_CHARS = 2000;
+  const MAX_CONTENT_CHARS = 500;
   const SEARCH_BASE = 'https://s.jina.ai/';
   const READER_BASE = 'https://r.jina.ai/';
 
@@ -45,7 +45,7 @@ window['ai_edge_gallery_get_result'] = async (dataStr, secret) => {
       return JSON.stringify({ error: 'query is required.' });
     }
 
-    const maxResults = Math.min(Math.max(1, parseInt(params.max_results) || 3), 5);
+    const maxResults = Math.min(Math.max(1, parseInt(params.max_results) || 2), 5);
 
     const headers = { 'Accept': 'application/json' };
     if (secret) {
