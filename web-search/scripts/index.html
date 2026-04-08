@@ -22,76 +22,94 @@
 /**
  * Web Search + Fetch skill for Google AI Edge Gallery Agent Mode.
  *
- * Searches the web via Jina.ai Search API (s.jina.ai), then fetches
- * the full content of top results via Jina.ai Reader API (r.jina.ai).
- * Both APIs are free to use; an optional API key increases rate limits.
+ * Search: Google Custom Search JSON API (auth via URL param, no CORS preflight)
+ * Fetch:  Jina.ai Reader API r.jina.ai (no auth required for reader)
  *
- * @param {string} dataStr - JSON string with fields:
- *   - query {string} Required. The search query.
- *   - max_results {number} Optional. Number of results to fetch (1–5, default 3).
- * @param {string} secret - Optional Jina.ai API key.
- * @returns {string} JSON string with { result: string } or { error: string }.
+ * Secret format: "{API_KEY}:{CX_ID}"
+ *   API_KEY: Google API key with Custom Search JSON API enabled
+ *   CX_ID:   Programmable Search Engine ID (cx)
+ *   Example: "AIzaSy...:{your_cx_id}"
+ *
+ * @param {string} dataStr - JSON with: query (required), max_results (optional, 1-5, default 2)
+ * @param {string} secret  - "{API_KEY}:{CX_ID}" from skill settings
+ * @returns {string} JSON: { result: string } or { error: string }
  */
 window['ai_edge_gallery_get_result'] = async (dataStr, secret) => {
   const MAX_CONTENT_CHARS = 500;
-  const SEARCH_BASE = 'https://s.jina.ai/';
   const READER_BASE = 'https://r.jina.ai/';
+  const SEARCH_BASE = 'https://www.googleapis.com/customsearch/v1';
 
   try {
     const params = JSON.parse(dataStr);
     const query = (params.query || '').trim();
-
-    if (!query) {
-      return JSON.stringify({ error: 'query is required.' });
-    }
+    if (!query) return JSON.stringify({ error: 'query is required.' });
 
     const maxResults = Math.min(Math.max(1, parseInt(params.max_results) || 2), 5);
 
-    const headers = { 'Accept': 'application/json' };
-    if (secret) {
-      headers['Authorization'] = `Bearer ${secret}`;
+    // Parse secret: "{API_KEY}:{CX_ID}"
+    const secretStr = (typeof secret === 'string' ? secret : '').trim();
+    const colonIdx = secretStr.indexOf(':');
+    if (!secretStr || colonIdx < 1) {
+      return JSON.stringify({
+        error: 'API key not configured. Set secret as "{Google_API_Key}:{CX_ID}". See SKILL.md for setup instructions.'
+      });
+    }
+    const apiKey = secretStr.slice(0, colonIdx).trim();
+    const cx = secretStr.slice(colonIdx + 1).trim();
+
+    if (!apiKey || !cx) {
+      return JSON.stringify({
+        error: 'Invalid secret format. Expected "{Google_API_Key}:{CX_ID}".'
+      });
     }
 
-    // Step 1: Search
-    const searchRes = await fetch(SEARCH_BASE + encodeURIComponent(query), { headers });
+    // Step 1: Search via Google Custom Search JSON API
+    // Auth via URL params — no Authorization header, no CORS preflight.
+    const searchUrl = `${SEARCH_BASE}?key=${encodeURIComponent(apiKey)}&cx=${encodeURIComponent(cx)}&q=${encodeURIComponent(query)}&num=${maxResults}`;
+
+    let searchRes;
+    try {
+      searchRes = await fetch(searchUrl, { credentials: 'omit' });
+    } catch (netErr) {
+      return JSON.stringify({
+        error: `[Network error] Could not reach search API: "${netErr.message}"`
+      });
+    }
 
     if (!searchRes.ok) {
+      let detail = '';
+      try { detail = (await searchRes.json()).error?.message || ''; } catch (_) {}
       return JSON.stringify({
-        error: `Search request failed with status ${searchRes.status}.`
+        error: `[HTTP ${searchRes.status}] Search failed. ${detail || (searchRes.status === 403 ? 'Check API key and CX ID.' : '')}`
       });
     }
 
     const searchData = await searchRes.json();
-    const hits = (searchData.data || []).slice(0, maxResults);
+    const items = (searchData.items || []).slice(0, maxResults);
 
-    if (hits.length === 0) {
+    if (items.length === 0) {
       return JSON.stringify({ result: 'No search results found for the given query.' });
     }
 
-    // Step 2: Fetch full page content for each result in parallel
-    const pages = await Promise.all(hits.map(async (hit) => {
-      const title = hit.title || '(no title)';
-      const url = hit.url || '';
-      const fallbackContent = (hit.content || hit.description || '').slice(0, MAX_CONTENT_CHARS);
+    // Step 2: Fetch full page content via r.jina.ai (no auth needed for reader)
+    const pages = await Promise.all(items.map(async (item) => {
+      const title = item.title || '(no title)';
+      const url = item.link || '';
+      const snippet = (item.snippet || '').slice(0, MAX_CONTENT_CHARS);
 
-      if (!url) {
-        return { title, url, content: fallbackContent };
-      }
+      if (!url) return { title, url, content: snippet };
 
       try {
-        const fetchRes = await fetch(READER_BASE + url, { headers });
-        if (!fetchRes.ok) {
-          return { title, url, content: fallbackContent };
-        }
+        const fetchRes = await fetch(READER_BASE + url, { credentials: 'omit' });
+        if (!fetchRes.ok) return { title, url, content: snippet };
         const fetchData = await fetchRes.json();
-        const content = (fetchData.data?.content || fallbackContent).slice(0, MAX_CONTENT_CHARS);
+        const content = (fetchData.data?.content || snippet).slice(0, MAX_CONTENT_CHARS);
         return { title, url, content };
       } catch (_) {
-        return { title, url, content: fallbackContent };
+        return { title, url, content: snippet };
       }
     }));
 
-    // Format as structured markdown for the agent
     const output = pages
       .map((p, i) => `## [${i + 1}] ${p.title}\nSource: ${p.url}\n\n${p.content}`)
       .join('\n\n---\n\n');
@@ -99,7 +117,7 @@ window['ai_edge_gallery_get_result'] = async (dataStr, secret) => {
     return JSON.stringify({ result: output });
 
   } catch (e) {
-    return JSON.stringify({ error: e.message });
+    return JSON.stringify({ error: `[Unexpected error] ${e.message}` });
   }
 };
 </script>
