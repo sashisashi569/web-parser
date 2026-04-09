@@ -144,12 +144,19 @@ Stats:
 | `[PARSE_ERROR]` | レスポンスが予期しない形式 | Jina.ai APIの変更の可能性 |
 | `[UNEXPECTED]` | その他の例外 | エラー詳細を確認 |
 
-### 動作確認済み環境
-
-- Google AI Edge Gallery (Agent Skills)
-- Gemma-4-E2B-IT (on-device, 8GB / 12GB RAM)
-- Android 16
-
+## 動作環境
+### 最低要件
+```
+Gemma4-E2B-IT
+Max Tokens : 3500~ (Approx. 6GB RAM~)
+Network connection required (8kbps~)
+```
+### 推奨要件
+```
+Gemma4-E4B-IT
+Max Tokens : 4000~ (Approx. 10GB RAM~)
+Network connection required (10kbps~)
+```
 ## ライセンス
 
 Apache License 2.0
